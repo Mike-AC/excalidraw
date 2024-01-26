@@ -5,11 +5,12 @@ import {
   ExcalidrawFreeDrawElement,
   NonDeleted,
   ExcalidrawTextElementWithContainer,
+  ElementsMapOrArray,
 } from "./types";
 import { distance2d, rotate, rotatePoint } from "../math";
 import rough from "roughjs/bin/rough";
 import { Drawable, Op } from "roughjs/bin/core";
-import { Point } from "../types";
+import { AppState, Point } from "../types";
 import { generateRoughOptions } from "../scene/Shape";
 import {
   isArrowElement,
@@ -35,12 +36,21 @@ export type RectangleBox = {
 
 type MaybeQuadraticSolution = [number | null, number | null] | false;
 
-// x and y position of top left corner, x and y position of bottom right corner
+/**
+ * x and y position of top left corner, x and y position of bottom right corner
+ */
 export type Bounds = readonly [
   minX: number,
   minY: number,
   maxX: number,
   maxY: number,
+];
+
+export type SceneBounds = readonly [
+  sceneX: number,
+  sceneY: number,
+  sceneX2: number,
+  sceneY2: number,
 ];
 
 export class ElementBounds {
@@ -152,7 +162,11 @@ export const getElementAbsoluteCoords = (
       includeBoundText,
     );
   } else if (isTextElement(element)) {
-    const container = getContainerElement(element);
+    const elementsMap =
+      Scene.getScene(element)?.getElementsMapIncludingDeleted();
+    const container = elementsMap
+      ? getContainerElement(element, elementsMap)
+      : null;
     if (isArrowElement(container)) {
       const coords = LinearElementEditor.getBoundTextElementPosition(
         container,
@@ -720,10 +734,8 @@ const getLinearElementRotatedBounds = (
 export const getElementBounds = (element: ExcalidrawElement): Bounds => {
   return ElementBounds.getBounds(element);
 };
-export const getCommonBounds = (
-  elements: readonly ExcalidrawElement[],
-): Bounds => {
-  if (!elements.length) {
+export const getCommonBounds = (elements: ElementsMapOrArray): Bounds => {
+  if ("size" in elements ? !elements.size : !elements.length) {
     return [0, 0, 0, 0];
   }
 
@@ -878,4 +890,22 @@ export const getCommonBoundingBox = (
     midX: (minX + maxX) / 2,
     midY: (minY + maxY) / 2,
   };
+};
+
+/**
+ * returns scene coords of user's editor viewport (visible canvas area) bounds
+ */
+export const getVisibleSceneBounds = ({
+  scrollX,
+  scrollY,
+  width,
+  height,
+  zoom,
+}: AppState): SceneBounds => {
+  return [
+    -scrollX,
+    -scrollY,
+    -scrollX + width / zoom.value,
+    -scrollY + height / zoom.value,
+  ];
 };

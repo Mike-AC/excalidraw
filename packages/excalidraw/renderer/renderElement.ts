@@ -5,6 +5,7 @@ import {
   ExcalidrawFreeDrawElement,
   ExcalidrawImageElement,
   ExcalidrawTextElementWithContainer,
+  ExcalidrawFrameLikeElement,
 } from "../element/types";
 import {
   isTextElement,
@@ -20,7 +21,11 @@ import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
 import type { RoughSVG } from "roughjs/bin/svg";
 
-import { SVGRenderConfig, StaticCanvasRenderConfig } from "../scene/types";
+import {
+  SVGRenderConfig,
+  StaticCanvasRenderConfig,
+  RenderableElementsMap,
+} from "../scene/types";
 import {
   distance,
   getFontString,
@@ -36,10 +41,12 @@ import {
   BinaryFiles,
   Zoom,
   InteractiveCanvasAppState,
+  ElementsPendingErasure,
 } from "../types";
 import { getDefaultAppState } from "../appState";
 import {
   BOUND_TEXT_PADDING,
+  ELEMENT_READY_TO_ERASE_OPACITY,
   FRAME_STYLE,
   MAX_DECIMALS_FOR_SVG_EXPORT,
   MIME_TYPES,
@@ -93,6 +100,27 @@ const shouldResetImageFilter = (
 
 const getCanvasPadding = (element: ExcalidrawElement) =>
   element.type === "freedraw" ? element.strokeWidth * 12 : 20;
+
+export const getRenderOpacity = (
+  element: ExcalidrawElement,
+  containingFrame: ExcalidrawFrameLikeElement | null,
+  elementsPendingErasure: ElementsPendingErasure,
+) => {
+  // multiplying frame opacity with element opacity to combine them
+  // (e.g. frame 50% and element 50% opacity should result in 25% opacity)
+  let opacity = ((containingFrame?.opacity ?? 100) * element.opacity) / 10000;
+
+  // if pending erasure, multiply again to combine further
+  // (so that erasing always results in lower opacity than original)
+  if (
+    elementsPendingErasure.has(element.id) ||
+    (containingFrame && elementsPendingErasure.has(containingFrame.id))
+  ) {
+    opacity *= ELEMENT_READY_TO_ERASE_OPACITY / 100;
+  }
+
+  return opacity;
+};
 
 export interface ExcalidrawElementWithCanvas {
   element: ExcalidrawElement | ExcalidrawTextElement;
@@ -269,8 +297,6 @@ const drawElementOnCanvas = (
   renderConfig: StaticCanvasRenderConfig,
   appState: StaticCanvasAppState,
 ) => {
-  context.globalAlpha =
-    ((getContainingFrame(element)?.opacity ?? 100) * element.opacity) / 10000;
   switch (element.type) {
     case "rectangle":
     case "iframe":
@@ -372,7 +398,6 @@ const drawElementOnCanvas = (
       }
     }
   }
-  context.globalAlpha = 1;
 };
 
 export const elementWithCanvasCache = new WeakMap<
@@ -590,11 +615,18 @@ export const renderSelectionElement = (
 
 export const renderElement = (
   element: NonDeletedExcalidrawElement,
+  elementsMap: RenderableElementsMap,
   rc: RoughCanvas,
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
   appState: StaticCanvasAppState,
 ) => {
+  context.globalAlpha = getRenderOpacity(
+    element,
+    getContainingFrame(element),
+    renderConfig.elementsPendingErasure,
+  );
+
   switch (element.type) {
     case "magicframe":
     case "frame": {
@@ -688,7 +720,7 @@ export const renderElement = (
         let shiftX = (x2 - x1) / 2 - (element.x - x1);
         let shiftY = (y2 - y1) / 2 - (element.y - y1);
         if (isTextElement(element)) {
-          const container = getContainerElement(element);
+          const container = getContainerElement(element, elementsMap);
           if (isArrowElement(container)) {
             const boundTextCoords =
               LinearElementEditor.getBoundTextElementPosition(
@@ -831,6 +863,8 @@ export const renderElement = (
       throw new Error(`Unimplemented type ${element.type}`);
     }
   }
+
+  context.globalAlpha = 1;
 };
 
 const roughSVGDrawWithPrecision = (
@@ -871,6 +905,7 @@ const maybeWrapNodesInFrameClipPath = (
 
 export const renderElementToSvg = (
   element: NonDeletedExcalidrawElement,
+  elementsMap: RenderableElementsMap,
   rsvg: RoughSVG,
   svgRoot: SVGElement,
   files: BinaryFiles,
@@ -883,7 +918,7 @@ export const renderElementToSvg = (
   let cx = (x2 - x1) / 2 - (element.x - x1);
   let cy = (y2 - y1) / 2 - (element.y - y1);
   if (isTextElement(element)) {
-    const container = getContainerElement(element);
+    const container = getContainerElement(element, elementsMap);
     if (isArrowElement(container)) {
       const [x1, y1, x2, y2] = getElementAbsoluteCoords(container);
 
@@ -984,6 +1019,7 @@ export const renderElementToSvg = (
         createPlaceholderEmbeddableLabel(element);
       renderElementToSvg(
         label,
+        elementsMap,
         rsvg,
         root,
         files,

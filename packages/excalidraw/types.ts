@@ -19,6 +19,7 @@ import {
   ExcalidrawMagicFrameElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawElementType,
+  ExcalidrawIframeLikeElement,
 } from "./element/types";
 import { Action } from "./actions/types";
 import { Point as RoughPoint } from "roughjs/bin/geometry";
@@ -41,7 +42,9 @@ import { Merge, ValueOf } from "./utility-types";
 
 export type Point = Readonly<RoughPoint>;
 
-export type Collaborator = {
+export type SocketId = string & { _brand: "SocketId" };
+
+export type Collaborator = Readonly<{
   pointer?: CollaboratorPointer;
   button?: "up" | "down";
   selectedElementIds?: AppState["selectedElementIds"];
@@ -51,12 +54,14 @@ export type Collaborator = {
     background: string;
     stroke: string;
   };
-  // The url of the collaborator's avatar, defaults to username intials
+  // The url of the collaborator's avatar, defaults to username initials
   // if not present
   avatarUrl?: string;
   // user id. If supplied, we'll filter out duplicates when rendering user avatars.
   id?: string;
-};
+  socketId?: SocketId;
+  isCurrentUser?: boolean;
+}>;
 
 export type CollaboratorPointer = {
   x: number;
@@ -122,6 +127,11 @@ export type ActiveTool =
 
 export type SidebarName = string;
 export type SidebarTabName = string;
+
+export type UserToFollow = {
+  socketId: SocketId;
+  username: string;
+};
 
 type _CommonCanvasAppState = {
   zoom: AppState["zoom"];
@@ -287,7 +297,7 @@ export interface AppState {
   offsetLeft: number;
 
   fileHandle: FileSystemHandle | null;
-  collaborators: Map<string, Collaborator>;
+  collaborators: Map<SocketId, Collaborator>;
   showStats: boolean;
   currentChartType: ChartType;
   pasteDialog:
@@ -303,13 +313,16 @@ export interface AppState {
   pendingImageElementId: ExcalidrawImageElement["id"] | null;
   showHyperlinkPopup: false | "info" | "editor";
   selectedLinearElement: LinearElementEditor | null;
-
   snapLines: readonly SnapLine[];
   originSnapOffset: {
     x: number;
     y: number;
   } | null;
   objectsSnapModeEnabled: boolean;
+  /** the user's clientId & username who is being followed on the canvas */
+  userToFollow: UserToFollow | null;
+  /** the clientIds of the users following the current user */
+  followedBy: Set<SocketId>;
 }
 
 export type UIAppState = Omit<
@@ -385,6 +398,11 @@ export type ExcalidrawInitialDataState = Merge<
   }
 >;
 
+export type OnUserFollowedPayload = {
+  userToFollow: UserToFollow;
+  action: "FOLLOW" | "UNFOLLOW";
+};
+
 export interface ExcalidrawProps {
   onChange?: (
     elements: readonly ExcalidrawElement[],
@@ -438,7 +456,8 @@ export interface ExcalidrawProps {
     activeTool: AppState["activeTool"],
     pointerDownState: PointerDownState,
   ) => void;
-  onScrollChange?: (scrollX: number, scrollY: number) => void;
+  onScrollChange?: (scrollX: number, scrollY: number, zoom: Zoom) => void;
+  onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;
   validateEmbeddable?:
     | boolean
@@ -456,7 +475,7 @@ export interface ExcalidrawProps {
 export type SceneData = {
   elements?: ImportedDataState["elements"];
   appState?: ImportedDataState["appState"];
-  collaborators?: Map<string, Collaborator>;
+  collaborators?: Map<SocketId, Collaborator>;
   commitToHistory?: boolean;
 };
 
@@ -482,10 +501,10 @@ export type ExportOpts = {
   ) => JSX.Element;
 };
 
-// NOTE at the moment, if action name coressponds to canvasAction prop, its
+// NOTE at the moment, if action name corresponds to canvasAction prop, its
 // truthiness value will determine whether the action is rendered or not
 // (see manager renderAction). We also override canvasAction values in
-// excalidraw package index.tsx.
+// Excalidraw package index.tsx.
 export type CanvasActions = Partial<{
   changeViewBackgroundColor: boolean;
   clearCanvas: boolean;
@@ -615,15 +634,9 @@ export type PointerDownState = Readonly<{
   boxSelection: {
     hasOccurred: boolean;
   };
-  elementIdsToErase: {
-    [key: ExcalidrawElement["id"]]: {
-      opacity: ExcalidrawElement["opacity"];
-      erase: boolean;
-    };
-  };
 }>;
 
-type UnsubscribeCallback = () => void;
+export type UnsubscribeCallback = () => void;
 
 export type ExcalidrawImperativeAPI = {
   updateScene: InstanceType<typeof App>["updateScene"];
@@ -674,6 +687,12 @@ export type ExcalidrawImperativeAPI = {
       pointerDownState: PointerDownState,
       event: PointerEvent,
     ) => void,
+  ) => UnsubscribeCallback;
+  onScrollChange: (
+    callback: (scrollX: number, scrollY: number, zoom: Zoom) => void,
+  ) => UnsubscribeCallback;
+  onUserFollow: (
+    callback: (payload: OnUserFollowedPayload) => void,
   ) => UnsubscribeCallback;
 };
 
@@ -727,3 +746,10 @@ export type Primitive =
   | undefined;
 
 export type JSONValue = string | number | boolean | null | object;
+
+export type EmbedsValidationStatus = Map<
+  ExcalidrawIframeLikeElement["id"],
+  boolean
+>;
+
+export type ElementsPendingErasure = Set<ExcalidrawElement["id"]>;

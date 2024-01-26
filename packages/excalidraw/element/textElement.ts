@@ -1,5 +1,6 @@
-import { getFontString, arrayToMap, isTestEnv } from "../utils";
+import { getFontString, arrayToMap, isTestEnv, normalizeEOL } from "../utils";
 import {
+  ElementsMap,
   ExcalidrawElement,
   ExcalidrawElementType,
   ExcalidrawTextContainer,
@@ -39,15 +40,13 @@ import { ExtractSetType } from "../utility-types";
 
 export const normalizeText = (text: string) => {
   return (
-    text
+    normalizeEOL(text)
       // replace tabs with spaces so they render and measure correctly
       .replace(/\t/g, "        ")
-      // normalize newlines
-      .replace(/\r?\n|\r/g, "\n")
   );
 };
 
-export const splitIntoLines = (text: string) => {
+const splitIntoLines = (text: string) => {
   return normalizeText(text).split("\n");
 };
 
@@ -684,17 +683,15 @@ export const getBoundTextElement = (element: ExcalidrawElement | null) => {
 };
 
 export const getContainerElement = (
-  element:
-    | (ExcalidrawElement & {
-        containerId: ExcalidrawElement["id"] | null;
-      })
-    | null,
-) => {
+  element: ExcalidrawTextElement | null,
+  elementsMap: ElementsMap,
+): ExcalidrawTextContainer | null => {
   if (!element) {
     return null;
   }
   if (element.containerId) {
-    return Scene.getScene(element)?.getElement(element.containerId) || null;
+    return (elementsMap.get(element.containerId) ||
+      null) as ExcalidrawTextContainer | null;
   }
   return null;
 };
@@ -754,26 +751,14 @@ export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
   };
 };
 
-export const getTextElementAngle = (textElement: ExcalidrawTextElement) => {
-  const container = getContainerElement(textElement);
+export const getTextElementAngle = (
+  textElement: ExcalidrawTextElement,
+  container: ExcalidrawTextContainer | null,
+) => {
   if (!container || isArrowElement(container)) {
     return textElement.angle;
   }
   return container.angle;
-};
-
-export const getBoundTextElementOffset = (
-  boundTextElement: ExcalidrawTextElement | null,
-) => {
-  const container = getContainerElement(boundTextElement);
-  if (!container || !boundTextElement) {
-    return 0;
-  }
-  if (isArrowElement(container)) {
-    return BOUND_TEXT_PADDING * 8;
-  }
-
-  return BOUND_TEXT_PADDING;
 };
 
 export const getBoundTextElementPosition = (
@@ -790,12 +775,12 @@ export const getBoundTextElementPosition = (
 
 export const shouldAllowVerticalAlign = (
   selectedElements: NonDeletedExcalidrawElement[],
+  elementsMap: ElementsMap,
 ) => {
   return selectedElements.some((element) => {
-    const hasBoundContainer = isBoundToContainer(element);
-    if (hasBoundContainer) {
-      const container = getContainerElement(element);
-      if (isTextElement(element) && isArrowElement(container)) {
+    if (isBoundToContainer(element)) {
+      const container = getContainerElement(element, elementsMap);
+      if (isArrowElement(container)) {
         return false;
       }
       return true;
@@ -806,12 +791,12 @@ export const shouldAllowVerticalAlign = (
 
 export const suppportsHorizontalAlign = (
   selectedElements: NonDeletedExcalidrawElement[],
+  elementsMap: ElementsMap,
 ) => {
   return selectedElements.some((element) => {
-    const hasBoundContainer = isBoundToContainer(element);
-    if (hasBoundContainer) {
-      const container = getContainerElement(element);
-      if (isTextElement(element) && isArrowElement(container)) {
+    if (isBoundToContainer(element)) {
+      const container = getContainerElement(element, elementsMap);
+      if (isArrowElement(container)) {
         return false;
       }
       return true;

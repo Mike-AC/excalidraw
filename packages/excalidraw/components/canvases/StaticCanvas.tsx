@@ -1,15 +1,19 @@
 import React, { useEffect, useRef } from "react";
 import { RoughCanvas } from "roughjs/bin/canvas";
 import { renderStaticScene } from "../../renderer/renderScene";
-import { isRenderThrottlingEnabled, isShallowEqual } from "../../utils";
+import { isShallowEqual } from "../../utils";
 import type { AppState, StaticCanvasAppState } from "../../types";
-import type { StaticCanvasRenderConfig } from "../../scene/types";
+import type {
+  RenderableElementsMap,
+  StaticCanvasRenderConfig,
+} from "../../scene/types";
 import type { NonDeletedExcalidrawElement } from "../../element/types";
+import { isRenderThrottlingEnabled } from "../../reactUtils";
 
 type StaticCanvasProps = {
   canvas: HTMLCanvasElement;
   rc: RoughCanvas;
-  elements: readonly NonDeletedExcalidrawElement[];
+  elementsMap: RenderableElementsMap;
   visibleElements: readonly NonDeletedExcalidrawElement[];
   versionNonce: number | undefined;
   selectionNonce: number | undefined;
@@ -62,7 +66,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
         canvas,
         rc: props.rc,
         scale: props.scale,
-        elements: props.elements,
+        elementsMap: props.elementsMap,
         visibleElements: props.visibleElements,
         appState: props.appState,
         renderConfig: props.renderConfig,
@@ -105,10 +109,10 @@ const areEqual = (
   if (
     prevProps.versionNonce !== nextProps.versionNonce ||
     prevProps.scale !== nextProps.scale ||
-    // we need to memoize on element arrays because they may have renewed
+    // we need to memoize on elementsMap because they may have renewed
     // even if versionNonce didn't change (e.g. we filter elements out based
     // on appState)
-    prevProps.elements !== nextProps.elements ||
+    prevProps.elementsMap !== nextProps.elementsMap ||
     prevProps.visibleElements !== nextProps.visibleElements
   ) {
     return false;

@@ -11,7 +11,13 @@ import {
   getElementAbsoluteCoords,
 } from "../element/bounds";
 import { renderSceneToSvg, renderStaticScene } from "../renderer/renderScene";
-import { cloneJSON, distance, getFontString } from "../utils";
+import {
+  arrayToMap,
+  cloneJSON,
+  distance,
+  getFontString,
+  toBrandedType,
+} from "../utils";
 import { AppState, BinaryFiles } from "../types";
 import {
   DEFAULT_EXPORT_PADDING,
@@ -26,8 +32,8 @@ import {
   getInitializedImageElements,
   updateImageCache,
 } from "../element/image";
-import { elementsOverlappingBBox } from "../../utils/export";
 import {
+  getElementsOverlappingFrame,
   getFrameLikeElements,
   getFrameLikeTitle,
   getRootElements,
@@ -37,6 +43,7 @@ import { Mutable } from "../utility-types";
 import { newElementWith } from "../element/mutateElement";
 import Scene from "./Scene";
 import { isFrameElement, isFrameLikeElement } from "../element/typeChecks";
+import { RenderableElementsMap } from "./types";
 
 const SVG_EXPORT_TAG = `<!-- svg-source:excalidraw -->`;
 
@@ -168,11 +175,7 @@ const prepareElementsForRender = ({
   let nextElements: readonly ExcalidrawElement[];
 
   if (exportingFrame) {
-    nextElements = elementsOverlappingBBox({
-      elements,
-      bounds: exportingFrame,
-      type: "overlap",
-    });
+    nextElements = getElementsOverlappingFrame(elements, exportingFrame);
   } else if (frameRendering.enabled && frameRendering.name) {
     nextElements = addFrameLabelsAsTextElements(elements, {
       exportWithDarkMode,
@@ -245,10 +248,14 @@ export const exportToCanvas = async (
     files,
   });
 
+  const elementsMap = toBrandedType<RenderableElementsMap>(
+    arrayToMap(elementsForRender),
+  );
+
   renderStaticScene({
     canvas,
     rc: rough.canvas(canvas),
-    elements: elementsForRender,
+    elementsMap,
     visibleElements: elementsForRender,
     scale,
     appState: {
@@ -266,6 +273,9 @@ export const exportToCanvas = async (
       imageCache,
       renderGrid: false,
       isExporting: true,
+      // empty disables embeddable rendering
+      embedsValidationStatus: new Map(),
+      elementsPendingErasure: new Set(),
     },
   });
 
@@ -287,6 +297,9 @@ export const exportToSvg = async (
   },
   files: BinaryFiles | null,
   opts?: {
+    /**
+     * if true, all embeddables passed in will be rendered when possible.
+     */
     renderEmbeddables?: boolean;
     exportingFrame?: ExcalidrawFrameLikeElement | null;
   },
@@ -327,7 +340,7 @@ export const exportToSvg = async (
   if (exportEmbedScene) {
     try {
       metadata = await (
-        await import(/* webpackChunkName: "image" */ "../data/image")
+        await import("../data/image")
       ).encodeSvgMetadata({
         // when embedding scene, we want to embed the origionally supplied
         // elements which don't contain the temp frame labels.
@@ -427,15 +440,32 @@ export const exportToSvg = async (
   }
 
   const rsvg = rough.svg(svgRoot);
-  renderSceneToSvg(elementsForRender, rsvg, svgRoot, files || {}, {
-    offsetX,
-    offsetY,
-    isExporting: true,
-    exportWithDarkMode,
-    renderEmbeddables: opts?.renderEmbeddables ?? false,
-    frameRendering,
-    canvasBackgroundColor: viewBackgroundColor,
-  });
+
+  const renderEmbeddables = opts?.renderEmbeddables ?? false;
+
+  renderSceneToSvg(
+    elementsForRender,
+    toBrandedType<RenderableElementsMap>(arrayToMap(elementsForRender)),
+    rsvg,
+    svgRoot,
+    files || {},
+    {
+      offsetX,
+      offsetY,
+      isExporting: true,
+      exportWithDarkMode,
+      renderEmbeddables,
+      frameRendering,
+      canvasBackgroundColor: viewBackgroundColor,
+      embedsValidationStatus: renderEmbeddables
+        ? new Map(
+            elementsForRender
+              .filter((element) => isFrameLikeElement(element))
+              .map((element) => [element.id, true]),
+          )
+        : new Map(),
+    },
+  );
 
   tempScene.destroy();
 
