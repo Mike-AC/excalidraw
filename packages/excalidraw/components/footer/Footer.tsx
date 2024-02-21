@@ -13,7 +13,7 @@ import { HelpButton } from "../HelpButton";
 import { Section } from "../Section";
 import Stack from "../Stack";
 import { UIAppState } from "../../types";
-import ProgressDemo from "../Progress"
+import ProgressDemo from "../Progress";
 
 const Footer = ({
   appState,
@@ -72,7 +72,7 @@ const Footer = ({
         </Stack.Col>
       </div>
       <FooterCenterTunnel.Out />
-      <ProgressDemo/>
+      <ProgressDemo />
       <div
         className={clsx("layer-ui__wrapper__footer-right zen-mode-transition", {
           "transition-right": appState.zenModeEnabled,

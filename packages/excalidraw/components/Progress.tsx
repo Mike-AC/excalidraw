@@ -29,7 +29,7 @@ const ProgressDemo: FC = () => {
     if (intervalId) {
       clearInterval(intervalId);
       setIntervalId(null);
-      setProgress(0)
+      setProgress(0);
     }
   };
 
