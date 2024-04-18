@@ -25,7 +25,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
   "prettier": "@excalidraw/prettier-config",
   "scripts": {
     "build-node": "node ./scripts/build-node.js",
@@ -36,5 +35,8 @@
     "start": "yarn && vite",
     "start:production": "npm run build && npx http-server build -a localhost -p 5001 -o",
     "build:preview": "yarn build && vite preview --port 5000"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.5.11"
   }
 }
