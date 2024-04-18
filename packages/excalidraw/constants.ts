@@ -210,6 +210,7 @@ export const VERSION_TIMEOUT = 30000;
 export const SCROLL_TIMEOUT = 100;
 export const ZOOM_STEP = 0.1;
 export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 30.0;
 export const HYPERLINK_TOOLTIP_DELAY = 300;
 
 // Report a user inactive after IDLE_THRESHOLD milliseconds
@@ -315,10 +316,6 @@ export const ROUNDNESS = {
   // (see DEFAULT_ADAPTIVE_RADIUS constant)
   ADAPTIVE_RADIUS: 3,
 } as const;
-
-/** key containt id of precedeing elemnt id we use in reconciliation during
- * collaboration */
-export const PRECEDING_ELEMENT_KEY = "__precedingElement__";
 
 export const ROUGHNESS = {
   architect: 0,
