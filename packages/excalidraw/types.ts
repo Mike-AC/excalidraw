@@ -1,5 +1,5 @@
-import React from "react";
-import {
+import type React from "react";
+import type {
   PointerType,
   ExcalidrawLinearElement,
   NonDeletedExcalidrawElement,
@@ -22,24 +22,25 @@ import {
   ExcalidrawIframeLikeElement,
   OrderedExcalidrawElement,
 } from "./element/types";
-import { Action } from "./actions/types";
-import { Point as RoughPoint } from "roughjs/bin/geometry";
-import { LinearElementEditor } from "./element/linearElementEditor";
-import { SuggestedBinding } from "./element/binding";
-import { ImportedDataState } from "./data/types";
+import type { Action } from "./actions/types";
+import type { Point as RoughPoint } from "roughjs/bin/geometry";
+import type { LinearElementEditor } from "./element/linearElementEditor";
+import type { SuggestedBinding } from "./element/binding";
+import type { ImportedDataState } from "./data/types";
 import type App from "./components/App";
 import type { throttleRAF } from "./utils";
-import { Spreadsheet } from "./charts";
-import { Language } from "./i18n";
-import { ClipboardData } from "./clipboard";
-import { isOverScrollBars } from "./scene/scrollbars";
-import { MaybeTransformHandleType } from "./element/transformHandles";
-import Library from "./data/library";
+import type { Spreadsheet } from "./charts";
+import type { Language } from "./i18n";
+import type { ClipboardData } from "./clipboard";
+import type { isOverScrollBars } from "./scene/scrollbars";
+import type { MaybeTransformHandleType } from "./element/transformHandles";
+import type Library from "./data/library";
 import type { FileSystemHandle } from "./data/filesystem";
 import type { IMAGE_MIME_TYPES, MIME_TYPES } from "./constants";
-import { ContextMenuItems } from "./components/ContextMenu";
-import { SnapLine } from "./snapping";
-import { Merge, MaybePromise, ValueOf } from "./utility-types";
+import type { ContextMenuItems } from "./components/ContextMenu";
+import type { SnapLine } from "./snapping";
+import type { Merge, MaybePromise, ValueOf } from "./utility-types";
+import type { StoreActionType } from "./store";
 
 export type Point = Readonly<RoughPoint>;
 
@@ -196,6 +197,7 @@ export type InteractiveCanvasAppState = Readonly<
     // SnapLines
     snapLines: AppState["snapLines"];
     zenModeEnabled: AppState["zenModeEnabled"];
+    editingElement: AppState["editingElement"];
   }
 >;
 
@@ -334,7 +336,11 @@ export interface AppState {
 
   fileHandle: FileSystemHandle | null;
   collaborators: Map<SocketId, Collaborator>;
-  showStats: boolean;
+  stats: {
+    open: boolean;
+    /** bitmap. Use `STATS_PANELS` bit values */
+    panels: number;
+  };
   currentChartType: ChartType;
   pasteDialog:
     | {
@@ -438,7 +444,9 @@ export interface ExcalidrawProps {
     appState: AppState,
     files: BinaryFiles,
   ) => void;
-  initialData?: MaybePromise<ExcalidrawInitialDataState | null>;
+  initialData?:
+    | (() => MaybePromise<ExcalidrawInitialDataState | null>)
+    | MaybePromise<ExcalidrawInitialDataState | null>;
   excalidrawAPI?: (api: ExcalidrawImperativeAPI) => void;
   isCollaborating?: boolean;
   onPointerUpdate?: (payload: {
@@ -507,7 +515,7 @@ export type SceneData = {
   elements?: ImportedDataState["elements"];
   appState?: ImportedDataState["appState"];
   collaborators?: Map<SocketId, Collaborator>;
-  commitToStore?: boolean;
+  storeAction?: StoreActionType;
 };
 
 export enum UserIdleState {
@@ -591,6 +599,7 @@ export type AppClassProperties = {
   files: BinaryFiles;
   device: App["device"];
   scene: App["scene"];
+  syncActionResult: App["syncActionResult"];
   pasteFromClipboard: App["pasteFromClipboard"];
   id: App["id"];
   onInsertElements: App["onInsertElements"];
